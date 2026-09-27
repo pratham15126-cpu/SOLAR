@@ -1,1 +1,369 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Solar Panel Orientation Optimizer | PSO</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+<script src="https://cdn.plot.ly/plotly-2.32.0.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" id="MathJax-script" async></script>
+</head>
+<body>
 
+<!-- ============ NAV ============ -->
+<header class="topbar">
+  <div class="brand">
+    <span class="brand-icon">☀️</span>
+    <div>
+      <div class="brand-title">Solar Orientation Optimizer</div>
+      <div class="brand-sub">PSO-based Tilt &amp; Azimuth Optimization</div>
+    </div>
+  </div>
+  <nav class="tabs">
+    <button class="tab-btn active" data-target="home">Home</button>
+    <button class="tab-btn" data-target="optimize">Optimization</button>
+    <button class="tab-btn" data-target="results">Results</button>
+    <button class="tab-btn" data-target="methodology">Methodology</button>
+  </nav>
+</header>
+
+<main>
+
+<!-- ============ HOME ============ -->
+<section id="home" class="page active">
+  <div class="hero">
+    <h1>Intelligent Solar Panel Orientation Optimization</h1>
+    <p class="hero-sub">Maximizing estimated energy harvest using Particle Swarm Optimization,
+      real solar-geometry equations, and a physically-grounded clear-sky irradiance model.</p>
+    <button class="btn btn-primary btn-lg" onclick="goTo('optimize')">Start Optimization →</button>
+  </div>
+
+  <div class="card-grid">
+    <div class="info-card">
+      <div class="info-icon">🎯</div>
+      <h3>Objective</h3>
+      <p>Find the tilt (β) and azimuth (γ) angles of a solar panel that maximize estimated
+      collected energy for a given location, date, and time window.</p>
+    </div>
+    <div class="info-card">
+      <div class="info-icon">🧭</div>
+      <h3>Solar Geometry</h3>
+      <p>Declination, equation of time, hour angle, solar altitude and azimuth are computed
+      analytically from first principles &mdash; no external APIs.</p>
+    </div>
+    <div class="info-card">
+      <div class="info-icon">🐦</div>
+      <h3>PSO Optimizer</h3>
+      <p>A textbook Particle-Swarm Optimizer with linearly decreasing inertia weight searches
+      the (tilt, azimuth) space to find the near-global optimum.</p>
+    </div>
+    <div class="info-card">
+      <div class="info-icon">📊</div>
+      <h3>Validated Against a Baseline</h3>
+      <p>Results are cross-checked against an exhaustive grid search and a naive fixed
+      orientation, quantifying both accuracy and computational efficiency.</p>
+    </div>
+  </div>
+
+  <div class="disclaimer">
+    ⚠️ <strong>Disclaimer:</strong> All energy values shown in this application are
+    <strong>estimated / simulated</strong> outputs of a simplified clear-sky physical model.
+    They are <strong>not</strong> measured real-world solar output and do not account for
+    weather, clouds, shading, or panel degradation.
+  </div>
+
+  <div class="card-grid two-col">
+    <div class="panel">
+      <h3>What this tool computes</h3>
+      <ul class="check-list">
+        <li>Optimal panel <b>tilt angle</b> (0&deg;&ndash;90&deg;)</li>
+        <li>Optimal panel <b>azimuth angle</b> (0&deg;&ndash;360&deg;, compass convention)</li>
+        <li><b>Estimated energy</b> (Wh/kWh) captured over your selected time window</li>
+        <li><b>PSO convergence</b> behaviour and search path</li>
+        <li>Full <b>energy landscape</b> across all tilt/azimuth combinations</li>
+        <li>Comparison vs. grid-search baseline &amp; fixed default orientation</li>
+      </ul>
+    </div>
+    <div class="panel">
+      <h3>Decision Variables &amp; Constraints (summary)</h3>
+      <p><b>Decision variables:</b> tilt β, azimuth γ</p>
+      <p><b>Objective:</b> maximize <code>E(β, γ) = ∫ G<sub>POA</sub>(t; β, γ) dt &times; A &times; η</code></p>
+      <p><b>Constraints:</b> 0&deg; ≤ β ≤ 90&deg;, 0&deg; ≤ γ &lt; 360&deg;, t ∈ [t<sub>start</sub>, t<sub>end</sub>]</p>
+      <p class="muted">Full derivations are on the Methodology page.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============ OPTIMIZATION ============ -->
+<section id="optimize" class="page">
+  <h2>Configure &amp; Run Optimization</h2>
+  <p class="muted">Fill in the location, date/time window, and panel specifications, then run
+    the PSO optimizer. Advanced PSO hyperparameters are optional.</p>
+
+  <form id="optimize-form">
+    <div class="form-grid">
+
+      <div class="panel">
+        <h3>📍 Location</h3>
+        <div class="field-row">
+          <label>Location mode</label>
+          <div class="seg-control">
+            <button type="button" class="seg-btn active" data-mode="city">Select City</button>
+            <button type="button" class="seg-btn" data-mode="manual">Manual Lat/Lon</button>
+          </div>
+        </div>
+        <div id="city-mode">
+          <label for="city-select">City</label>
+          <select id="city-select"></select>
+        </div>
+        <div class="field-row-2">
+          <div>
+            <label for="latitude">Latitude (&deg;)</label>
+            <input type="number" id="latitude" step="0.0001" min="-90" max="90" required>
+          </div>
+          <div>
+            <label for="longitude">Longitude (&deg;)</label>
+            <input type="number" id="longitude" step="0.0001" min="-180" max="180" required>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h3>📅 Date &amp; Time Window</h3>
+        <label for="date">Date</label>
+        <input type="date" id="date" required>
+        <div class="field-row-2">
+          <div>
+            <label for="start-time">Start time (local)</label>
+            <input type="time" id="start-time" required>
+          </div>
+          <div>
+            <label for="end-time">End time (local)</label>
+            <input type="time" id="end-time" required>
+          </div>
+        </div>
+        <p class="hint">Assumption: clock time ≈ local solar time, corrected using the
+          equation of time (see Methodology).</p>
+      </div>
+
+      <div class="panel">
+        <h3>🔋 Panel Specification</h3>
+        <div class="field-row-2">
+          <div>
+            <label for="area">Panel area (m²)</label>
+            <input type="number" id="area" step="0.1" min="0.01" value="5" required>
+          </div>
+          <div>
+            <label for="efficiency">Panel efficiency (%)</label>
+            <input type="number" id="efficiency" step="0.5" min="1" max="100" value="20" required>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h3>⚙️ PSO Settings <span class="muted small">(advanced, optional)</span></h3>
+        <div class="field-row-2">
+          <div>
+            <label for="n-particles">Particles</label>
+            <input type="number" id="n-particles" min="10" max="100" value="30">
+          </div>
+          <div>
+            <label for="n-iterations">Iterations</label>
+            <input type="number" id="n-iterations" min="10" max="300" value="60">
+          </div>
+        </div>
+        <div class="field-row-2">
+          <div>
+            <label for="w-max">Inertia w<sub>max</sub></label>
+            <input type="number" id="w-max" step="0.05" min="0" max="1.2" value="0.9">
+          </div>
+          <div>
+            <label for="w-min">Inertia w<sub>min</sub></label>
+            <input type="number" id="w-min" step="0.05" min="0" max="1.2" value="0.4">
+          </div>
+        </div>
+        <div class="field-row-2">
+          <div>
+            <label for="c1">Cognitive c<sub>1</sub></label>
+            <input type="number" id="c1" step="0.1" min="0.1" max="4" value="1.5">
+          </div>
+          <div>
+            <label for="c2">Social c<sub>2</sub></label>
+            <input type="number" id="c2" step="0.1" min="0.1" max="4" value="1.5">
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="form-error" class="banner banner-error hidden"></div>
+
+    <div class="actions">
+      <button type="submit" class="btn btn-primary btn-lg" id="run-btn">🚀 Run Optimization</button>
+      <button type="reset" class="btn btn-secondary" id="reset-btn">Reset</button>
+    </div>
+  </form>
+
+  <div id="loading-overlay" class="loading-overlay hidden">
+    <div class="spinner"></div>
+    <p>Computing solar geometry, running grid-search baseline, and optimizing with PSO…</p>
+  </div>
+</section>
+
+<!-- ============ RESULTS ============ -->
+<section id="results" class="page">
+  <h2>Results &amp; Visualizations</h2>
+  <div id="no-results" class="empty-state">
+    <p>No results yet. Go to the <b>Optimization</b> tab and run the optimizer.</p>
+    <button class="btn btn-primary" onclick="goTo('optimize')">Go to Optimization</button>
+  </div>
+
+  <div id="results-content" class="hidden">
+    <div class="disclaimer small">⚠️ Estimated/simulated results from a simplified clear-sky
+      model — not measured real-world solar output.</div>
+
+    <h3 class="section-title">Optimal Orientation (PSO)</h3>
+    <div class="stat-grid" id="stat-grid-main"></div>
+
+    <h3 class="section-title">Baseline Comparison</h3>
+    <div class="stat-grid" id="stat-grid-compare"></div>
+    <div class="chart-card">
+      <div id="chart-comparison" class="chart"></div>
+    </div>
+
+    <h3 class="section-title">PSO Convergence</h3>
+    <div class="chart-card">
+      <div id="chart-convergence" class="chart"></div>
+    </div>
+
+    <h3 class="section-title">Energy / Optimization Landscape</h3>
+    <div class="chart-card">
+      <div id="chart-landscape" class="chart chart-tall"></div>
+      <p class="hint">Heatmap of estimated energy across all (tilt, azimuth) combinations
+        from the grid-search baseline. Markers show the PSO optimum (★) and the PSO search
+        path (white line) converging toward the global optimum.</p>
+    </div>
+
+    <h3 class="section-title">Solar Position Information</h3>
+    <div class="stat-grid" id="stat-grid-solar"></div>
+    <div class="chart-card">
+      <div id="chart-solarpos" class="chart"></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ METHODOLOGY ============ -->
+<section id="methodology" class="page">
+  <h2>Methodology</h2>
+
+  <div class="panel">
+    <h3>1. Real-World Problem</h3>
+    <p>Fixed solar panels installed at a suboptimal tilt/azimuth capture significantly less
+    energy than optimally oriented panels. Given a location, date, and observation window,
+    we want the panel orientation that maximizes captured solar energy.</p>
+  </div>
+
+  <div class="panel">
+    <h3>2. Decision Variables</h3>
+    <p>\( \beta \) &mdash; panel tilt angle from horizontal (degrees).<br>
+       \( \gamma \) &mdash; panel azimuth angle, compass convention
+       (0&deg;=N, 90&deg;=E, 180&deg;=S, 270&deg;=W).</p>
+  </div>
+
+  <div class="panel">
+    <h3>3. Objective Function</h3>
+    <p>Maximize total estimated energy collected over the time window \([t_0, t_1]\):</p>
+    <p>\[ E(\beta,\gamma) = A \cdot \eta \int_{t_0}^{t_1} G_{POA}(t;\beta,\gamma)\, dt \]</p>
+    <p>where \(A\) is panel area (m²), \(\eta\) is panel efficiency, and \(G_{POA}\) is the
+    plane-of-array irradiance (W/m²):</p>
+    <p>\[ G_{POA} = \underbrace{G_{DNI}\cos\theta_i}_{\text{beam}} +
+       \underbrace{G_{DHI}\frac{1+\cos\beta}{2}}_{\text{diffuse (isotropic sky)}} +
+       \underbrace{G_{GHI}\,\rho\,\frac{1-\cos\beta}{2}}_{\text{ground-reflected}} \]</p>
+    <p>The angle of incidence \(\theta_i\) between the sun and the panel normal
+    (Duffie &amp; Beckman formulation):</p>
+    <p>\[ \cos\theta_i = \sin\alpha\cos\beta + \cos\alpha\sin\beta\cos(\gamma_s-\gamma) \]</p>
+    <p>with \(\alpha\)=solar altitude, \(\gamma_s\)=solar azimuth, \(\rho=0.2\) ground albedo.
+    Negative \(\cos\theta_i\) (sun behind the panel) is clipped to zero.</p>
+  </div>
+
+  <div class="panel">
+    <h3>4. Constraints</h3>
+    <ul class="check-list">
+      <li>\(0^\circ \le \beta \le 90^\circ\) &mdash; physical tilt range</li>
+      <li>\(0^\circ \le \gamma < 360^\circ\) &mdash; full compass range</li>
+      <li>\(t \in [t_0, t_1]\) &mdash; user-selected observation window on a single day</li>
+      <li>\(G_{POA} \ge 0\) &mdash; irradiance cannot be negative; night-time contributes 0</li>
+    </ul>
+  </div>
+
+  <div class="panel">
+    <h3>5. Solar Position Calculation</h3>
+    <p>Declination (Cooper, 1969): \(\delta = 23.45\sin\left(\frac{360}{365}(284+n)\right)\),
+       where \(n\)=day of year.</p>
+    <p>Equation of time (minutes): \(EoT = 9.87\sin(2B) - 7.53\cos B - 1.5\sin B\),
+       \(B=\frac{360}{365}(n-81)\).</p>
+    <p>Hour angle: \(H = 15(t_{solar}-12)\), where \(t_{solar}=t_{clock}+EoT/60\)
+       (longitude/timezone correction is not modelled &mdash; documented assumption).</p>
+    <p>Altitude: \(\sin\alpha = \sin\phi\sin\delta + \cos\phi\cos\delta\cos H\).</p>
+    <p>Azimuth: \(\cos\gamma_s = \dfrac{\sin\delta - \sin\alpha\sin\phi}{\cos\alpha\cos\phi}\),
+       reflected to \([0,360)\) using the sign of \(H\).</p>
+    <p><b>Clear-sky irradiance:</b> beam irradiance uses a Meinel-type exponential
+       air-mass attenuation \(G_{DNI}=I_0\cdot 0.7^{AM^{0.678}}\), \(AM=1/\sin\alpha\);
+       diffuse is approximated as \(G_{DHI}=0.1\,G_{DNI}\); \(G_{GHI}=G_{DNI}\sin\alpha+G_{DHI}\).
+       This is a standard simplified clear-sky approximation used in introductory solar
+       engineering &mdash; it ignores clouds, aerosols, and local atmospheric variability.</p>
+  </div>
+
+  <div class="panel">
+    <h3>6. Particle Swarm Optimization (PSO)</h3>
+    <p>Each particle \(i\) has a position \(x_i=(\beta_i,\gamma_i)\) and velocity \(v_i\) in the
+    2-D search space. At each iteration:</p>
+    <p>\[ v_i \leftarrow w\,v_i + c_1 r_1 (p_i - x_i) + c_2 r_2 (g - x_i) \]</p>
+    <p>\[ x_i \leftarrow x_i + v_i \]</p>
+    <p>where \(p_i\) is the particle's personal best, \(g\) is the swarm's global best,
+    \(r_1,r_2\sim U(0,1)\), and \(w\) linearly decreases from \(w_{max}\) to \(w_{min}\)
+    across iterations (favouring exploration early, exploitation later). Velocities and
+    positions are clamped to stay within the physical bounds. The fitness of a particle is
+    simply \(E(\beta_i,\gamma_i)\) &mdash; maximized directly (no penalty terms needed since
+    bounds are enforced by clamping).</p>
+  </div>
+
+  <div class="panel">
+    <h3>7. Baseline Methods</h3>
+    <p><b>Grid Search (validation baseline):</b> an exhaustive scan of the (tilt, azimuth)
+    space at 2°×4° resolution (≈4,140 evaluations), used to (a) verify PSO converges to the
+    same region of the search space and (b) render the full energy landscape.</p>
+    <p><b>Fixed/Default Orientation (naive real-world baseline):</b> tilt = |latitude|,
+    azimuth = 180° (south-facing, Northern Hemisphere) or 0° (north-facing, Southern
+    Hemisphere) &mdash; a common rule-of-thumb used in practice without optimization.</p>
+  </div>
+
+  <div class="panel">
+    <h3>8. Convergence &amp; Performance Analysis</h3>
+    <p>The convergence graph plots the best-so-far energy value after each PSO iteration,
+    which is monotonically non-decreasing by construction. Good convergence behaviour shows
+    rapid improvement in early iterations followed by a plateau near the global optimum.
+    We additionally report the number of objective-function evaluations used by PSO vs. grid
+    search: PSO typically reaches within a fraction of a percent of the exhaustive grid-search
+    optimum using an order of magnitude fewer evaluations, demonstrating its efficiency as a
+    metaheuristic for this continuous, low-dimensional, largely unimodal optimization
+    landscape.</p>
+  </div>
+
+  <div class="disclaimer">
+    ⚠️ All figures produced by this tool are theoretical estimates from the simplified model
+    above. They are intended for educational/optimization demonstration purposes and are
+    <b>not</b> a substitute for measured irradiance data or professional PV system design
+    tools (e.g. PVsyst, SAM, pvlib with real weather files).
+  </div>
+</section>
+
+</main>
+
+<footer>
+  <p>Computational Mathematics for AI&amp;ML &mdash; Solar Panel Orientation Optimization Project
+  &middot; Built with Flask, NumPy &amp; Plotly</p>
+</footer>
+
+<script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>
